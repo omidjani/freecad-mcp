@@ -219,3 +219,25 @@ def test_edit_object_returns_failure_with_existing_object_name() -> None:
     assert result["object_name"] == "Cut"
     assert "Base or Tool is not set" in result["error"]
     assert doc.recompute_count == 1
+
+
+def test_fem_object_with_unknown_analysis_is_not_created() -> None:
+    doc = FakeDocument(FakeObject(Name="Box"))
+    made: list[str] = []
+
+    with load_object_factory(doc) as object_factory:
+        fem = object_factory.ObjectsFem
+        fem.makeMaterialSolid = fem.makeAnalysis = lambda _doc, name: FakeObject(Name=name)
+        fem.makeConstraintFixed = (
+            lambda _doc, name: made.append(name) or FakeObject(Name=name)
+        )
+        request = object_factory.Object(
+            name="Fixed",
+            type="Fem::ConstraintFixed",
+            analysis="MissingAnalysis",
+            properties={},
+        )
+        result = object_factory.create_object_gui("Doc", request)
+
+    assert "Analysis 'MissingAnalysis' not found" in result
+    assert made == []

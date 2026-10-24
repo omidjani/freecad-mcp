@@ -13,6 +13,16 @@ from rpc_server.property_mapper import Object, set_object_property
 from rpc_server.object_validation import object_validity_error
 
 
+def _get_analysis(doc: FreeCAD.Document, analysis_name: str):
+    """Return the named analysis container or raise a readable error."""
+    analysis = doc.getObject(analysis_name)
+    if analysis is None:
+        raise ValueError(f"Analysis '{analysis_name}' not found in document '{doc.Name}'.")
+    if not hasattr(analysis, "addObject"):
+        raise ValueError(f"'{analysis_name}' is not a FEM analysis container.")
+    return analysis
+
+
 def _create_fem_mesh(doc: FreeCAD.Document, obj: Object):
     """Create a ``Fem::FemMeshGmsh`` and run Gmsh to populate it.
 
@@ -22,21 +32,23 @@ def _create_fem_mesh(doc: FreeCAD.Document, obj: Object):
     """
     from femmesh.gmshtools import GmshTools
 
-    res = getattr(doc, obj.analysis).addObject(
-        ObjectsFem.makeMeshGmsh(doc, obj.name)
-    )[0]
-    geom_attr = "Shape" if hasattr(res, "Shape") else ("Part" if hasattr(res, "Part") else None)
-    legacy_to_new = {
-        "Part": geom_attr,
-        "ElementSizeMax": "CharacteristicLengthMax",
-        "ElementSizeMin": "CharacteristicLengthMin",
-    }
+    # Validate every input before creating anything, so a bad request does not
+    # leave an orphan mesh object behind in the document.
+    analysis = _get_analysis(doc, obj.analysis)
     geom_key = "Part" if "Part" in obj.properties else ("Shape" if "Shape" in obj.properties else None)
     if geom_key is None:
         raise ValueError("'Part' (or 'Shape') property not found in properties.")
     target_obj = doc.getObject(obj.properties[geom_key])
     if target_obj is None:
         raise ValueError(f"Referenced object '{obj.properties[geom_key]}' not found.")
+
+    res = analysis.addObject(ObjectsFem.makeMeshGmsh(doc, obj.name))[0]
+    geom_attr = "Shape" if hasattr(res, "Shape") else ("Part" if hasattr(res, "Part") else None)
+    legacy_to_new = {
+        "Part": geom_attr,
+        "ElementSizeMax": "CharacteristicLengthMax",
+        "ElementSizeMin": "CharacteristicLengthMin",
+    }
     if geom_attr is None:
         raise ValueError("Mesh object has neither 'Shape' nor 'Part' property.")
     setattr(res, geom_attr, target_obj)
@@ -67,14 +79,16 @@ def _create_fem_object(doc: FreeCAD.Document, obj: Object):
 
     if not callable(make_method):
         raise ValueError(f"No creation method '{method_name}' found in ObjectsFem.")
+    add_to_analysis = obj.type != "Fem::AnalysisPython" and obj.analysis
+    analysis = _get_analysis(doc, obj.analysis) if add_to_analysis else None
 
     res = make_method(doc, obj.name)
     set_object_property(doc, res, obj.properties)
     FreeCAD.Console.PrintMessage(
         f"FEM object '{res.Name}' created with '{method_name}'.\n"
     )
-    if obj.type != "Fem::AnalysisPython" and obj.analysis:
-        getattr(doc, obj.analysis).addObject(res)
+    if analysis is not None:
+        analysis.addObject(res)
     return res
 
 

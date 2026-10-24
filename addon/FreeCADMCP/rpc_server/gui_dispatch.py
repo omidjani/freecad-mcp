@@ -172,6 +172,21 @@ def get_dispatch_status() -> dict[str, Any]:
     return _dispatch_health.snapshot()
 
 
+def post_to_gui(task: Callable[[], Any]) -> bool:
+    """Queue ``task`` on the GUI thread without waiting for it.
+
+    For fire-and-forget work such as status-bar updates. Exceptions are
+    logged by ``process_gui_tasks``. Returns False (and drops the task) while
+    the dispatch is stuck, so callers never pile work behind a hung task.
+    """
+    if _dispatch_health.rejection() is not None:
+        return False
+    _rpc_request_queue.put(task)
+    if _waker is not None:
+        _waker.wake()
+    return True
+
+
 def dispatch_to_gui(
     task: Callable[[], Any],
     timeout: float = 60,

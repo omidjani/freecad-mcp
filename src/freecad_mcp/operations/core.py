@@ -203,7 +203,13 @@ def get_object_operation(
     view_name: str = "Isometric",
 ) -> ToolResponse:
     try:
-        response = json_response(freecad.get_object(doc_name, obj_name))
+        obj = freecad.get_object(doc_name, obj_name)
+        if obj is None:
+            return text_response(
+                f"Object '{obj_name}' not found in document '{doc_name}'. "
+                "Use get_objects to list the available object names."
+            )
+        response = json_response(obj)
         skip_screenshot = only_text_feedback or not include_screenshot
         screenshot = None if skip_screenshot else freecad.get_active_screenshot(view_name)
         return add_screenshot_if_available(response, screenshot, skip_screenshot)
@@ -224,7 +230,11 @@ def get_parts_list_operation(freecad: FreeCADConnection) -> ToolResponse:
 
 
 def list_documents_operation(freecad: FreeCADConnection) -> ToolResponse:
-    return json_response(freecad.list_documents())
+    try:
+        return json_response(freecad.list_documents())
+    except Exception as e:
+        logger.error(f"Failed to list documents: {str(e)}")
+        return text_response(f"Failed to list documents: {str(e)}")
 
 
 def get_rpc_status_operation(freecad: FreeCADConnection) -> ToolResponse:

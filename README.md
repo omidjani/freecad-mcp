@@ -190,11 +190,14 @@ The `--host` value is validated on startup — it must be a valid IPv4/IPv6 addr
 * `edit_object`: Edit an object in FreeCAD.
 * `delete_object`: Delete an object in FreeCAD.
 * `execute_code`: Execute arbitrary Python code in FreeCAD.
+* `execute_code_async`: Run long, GUI-free Python code (e.g. heavy OCCT booleans) in a background thread and return immediately.
 * `insert_part_from_library`: Insert a part from the [parts library](https://github.com/FreeCAD/FreeCAD-library).
 * `get_view`: Get a screenshot of the active view.
 * `get_objects`: Get all objects in a document.
 * `get_object`: Get an object in a document.
 * `get_parts_list`: Get the list of parts in the [parts library](https://github.com/FreeCAD/FreeCAD-library).
+* `list_documents`: Get the list of open documents.
+* `reload_document`: Close and re-open a document so the GUI picks up changes made to its file outside FreeCAD (e.g. by `freecadcmd`).
 * `get_rpc_status`: Report RPC and GUI-dispatch health without using the FreeCAD GUI thread.
 * `run_fem_analysis`: Run the CalculiX solver on an existing `Fem::FemAnalysis` and return summary results (max von Mises stress, max displacement, node count, working directory). Auto-creates a `SolverCcxTools` if the analysis has none. See [`examples/cantilever_fem.py`](examples/cantilever_fem.py) for an end-to-end usage example.
 
