@@ -14,8 +14,11 @@ def _get_optional_app_type(name: str) -> type | tuple[type, ...] | None:
 _COLOR_TYPE = _get_optional_app_type("Color")
 
 
+_DOCUMENT_OBJECT_TYPE = _get_optional_app_type("DocumentObject")
+
+
 def serialize_value(value):
-    if isinstance(value, (int, float, str, bool)):
+    if value is None or isinstance(value, (int, float, str, bool)):
         return value
     elif isinstance(value, App.Vector):
         return {"x": value.x, "y": value.y, "z": value.z}
@@ -31,6 +34,12 @@ def serialize_value(value):
         }
     elif isinstance(value, (list, tuple)):
         return [serialize_value(v) for v in value]
+    elif isinstance(value, dict):
+        return {str(k): serialize_value(v) for k, v in value.items()}
+    elif _DOCUMENT_OBJECT_TYPE is not None and isinstance(value, _DOCUMENT_OBJECT_TYPE):
+        # Link properties (Base, Tool, Shape, ...) hold document objects; their
+        # Name is what create_object/edit_object accept to set the link again.
+        return value.Name
     elif _COLOR_TYPE is not None and isinstance(value, _COLOR_TYPE):
         return tuple(value)
     else:

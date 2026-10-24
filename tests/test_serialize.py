@@ -95,6 +95,29 @@ class SerializeValueTests(unittest.TestCase):
 
         self.assertEqual(serialize.serialize_value(FakeColor()), (0.1, 0.2, 0.3, 1.0))
 
+    def test_none_serializes_as_null(self) -> None:
+        serialize = load_serialize_module(make_freecad_module())
+
+        self.assertIsNone(serialize.serialize_value(None))
+
+    def test_dict_values_are_serialized_recursively(self) -> None:
+        serialize = load_serialize_module(make_freecad_module())
+
+        self.assertEqual(
+            serialize.serialize_value({"a": FakeQuantity(), 1: [None]}),
+            {"a": "20 mm", "1": [None]},
+        )
+
+    def test_linked_document_objects_serialize_as_their_name(self) -> None:
+        class FakeDocumentObject:
+            Name = "Box001"
+
+        module = make_freecad_module()
+        module.DocumentObject = FakeDocumentObject
+        serialize = load_serialize_module(module)
+
+        self.assertEqual(serialize.serialize_value([FakeDocumentObject()]), ["Box001"])
+
 
 if __name__ == "__main__":
     unittest.main()

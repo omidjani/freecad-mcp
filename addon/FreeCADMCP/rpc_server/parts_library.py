@@ -4,9 +4,22 @@ import FreeCAD
 import FreeCADGui
 
 
+def resolve_library_path(parts_lib_path: str, relative_path: str) -> str:
+    """Join ``relative_path`` onto the library root, refusing to leave it.
+
+    ``../`` segments or an absolute path would otherwise let a caller merge
+    any file on disk into the active document.
+    """
+    root = os.path.realpath(parts_lib_path)
+    part_path = os.path.realpath(os.path.join(root, relative_path))
+    if os.path.commonpath([root, part_path]) != root:
+        raise ValueError(f"Path '{relative_path}' is outside the parts library.")
+    return part_path
+
+
 def insert_part_from_library(relative_path):
     parts_lib_path = os.path.join(FreeCAD.getUserAppDataDir(), "Mod", "parts_library")
-    part_path = os.path.join(parts_lib_path, relative_path)
+    part_path = resolve_library_path(parts_lib_path, relative_path)
 
     if not os.path.exists(part_path):
         raise FileNotFoundError(f"Not found: {part_path}")

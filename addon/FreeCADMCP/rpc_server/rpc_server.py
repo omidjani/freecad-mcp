@@ -18,6 +18,7 @@ from rpc_server.gui_dispatch import (
     dispatch_to_gui,
     get_dispatch_status,
     init_waker,
+    post_to_gui,
     process_gui_tasks,
     request_shutdown,
 )
@@ -121,12 +122,14 @@ class FreeCADRPC:
         running headlessly). Returns success once the new document is
         loaded from disk.
         """
+        # The GUI handler reports the reopened document's actual name, which
+        # FreeCAD derives from the file and may differ from doc_name.
         res = dispatch_to_gui(
             lambda: self._reload_document_gui(doc_name),
             operation_name="reload_document",
         )
-        if _ok(res):
-            return {"success": True, "document_name": doc_name}
+        if isinstance(res, dict) and res.get("success"):
+            return res
         return _err(res)
 
     def run_fem_analysis(self, doc_name: str, analysis_name: str, timeout: int = 600) -> dict[str, Any]:
@@ -151,17 +154,14 @@ class FreeCADRPC:
         exceed the MCP timeout. The caller should poll a document object for
         completion status (e.g. check SessionState.Label via get_object).
         """
+        # Status-bar updates are posted without waiting: blocking here on a
+        # busy GUI thread would delay the "returns immediately" contract by
+        # up to the dispatch timeout.
         def _set_status(msg):
-            dispatch_to_gui(
-                lambda: FreeCADGui.getMainWindow().statusBar().showMessage(msg),
-                operation_name="show_async_status",
-            )
+            post_to_gui(lambda: FreeCADGui.getMainWindow().statusBar().showMessage(msg))
 
         def _clear_status():
-            dispatch_to_gui(
-                lambda: FreeCADGui.getMainWindow().statusBar().clearMessage(),
-                operation_name="clear_async_status",
-            )
+            post_to_gui(lambda: FreeCADGui.getMainWindow().statusBar().clearMessage())
 
         def worker() -> None:
             # NOTE: we do NOT redirect sys.stdout here. contextlib.redirect_stdout
@@ -215,7 +215,12 @@ class FreeCADRPC:
             f"Error executing Python code: {res}\n"
             f"--- code ---\n{code_preview}\n--- end ---\n"
         )
-        return _err(res)
+        failure = _err(res)
+        # Output printed before the failure is often what explains it.
+        partial_output = output_buffer.getvalue()
+        if partial_output and "error" in failure:
+            failure = {**failure, "error": f"{failure['error']}\nOutput before error: {partial_output}"}
+        return failure
 
     def get_objects(self, doc_name):
         # FreeCAD.getDocument raises (not returns None) for an unknown name.
@@ -339,11 +344,11 @@ class FreeCADRPC:
         # original document name when the file was previously saved
         # under that name.
         FreeCAD.closeDocument(doc_name)
-        FreeCAD.openDocument(file_path)
+        new_doc = FreeCAD.openDocument(file_path)
         FreeCAD.Console.PrintMessage(
-            f"Document '{doc_name}' reloaded from '{file_path}' via RPC.\n"
+            f"Document '{new_doc.Name}' reloaded from '{file_path}' via RPC.\n"
         )
-        return True
+        return {"success": True, "document_name": new_doc.Name}
 
     def _insert_part_from_library(self, relative_path):
         try:

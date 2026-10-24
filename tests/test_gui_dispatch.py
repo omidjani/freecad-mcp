@@ -195,3 +195,27 @@ def test_queued_timeout_cancels_task_without_marking_dispatch_stuck() -> None:
         assert "code" not in result
         assert not ran.is_set()
         assert gui_dispatch.get_dispatch_status()["state"] == "healthy"
+
+
+def test_post_to_gui_queues_without_waiting() -> None:
+    with load_gui_dispatch() as gui_dispatch:
+        ran = threading.Event()
+
+        assert gui_dispatch.post_to_gui(ran.set) is True
+        assert not ran.is_set()
+
+        gui_dispatch.process_gui_tasks(reschedule=False)
+
+        assert ran.is_set()
+
+
+def test_post_to_gui_drops_task_while_dispatch_is_stuck() -> None:
+    with load_gui_dispatch() as gui_dispatch:
+        gui_dispatch._dispatch_health.start(1, "hung_task")
+        gui_dispatch._dispatch_health.mark_timed_out(1, 1.0)
+        ran = threading.Event()
+
+        assert gui_dispatch.post_to_gui(ran.set) is False
+        gui_dispatch.process_gui_tasks(reschedule=False)
+
+        assert not ran.is_set()

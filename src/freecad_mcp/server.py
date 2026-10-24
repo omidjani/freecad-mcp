@@ -78,13 +78,17 @@ mcp = FastMCP(
 def get_freecad_connection() -> FreeCADConnection:
     """Get or create a persistent FreeCAD connection"""
     if state.freecad_connection is None:
-        state.freecad_connection = FreeCADConnection(host=state.rpc_host, port=9875)
-        if not state.freecad_connection.ping():
-            logger.error("Failed to ping FreeCAD")
-            state.freecad_connection = None
+        connection = FreeCADConnection(host=state.rpc_host, port=9875)
+        try:
+            reachable = connection.ping()
+        except Exception as e:
+            logger.error(f"Failed to ping FreeCAD: {str(e)}")
+            reachable = False
+        if not reachable:
             raise Exception(
                 "Failed to connect to FreeCAD. Make sure the FreeCAD addon is running."
             )
+        state.freecad_connection = connection
     return state.freecad_connection
 
 
@@ -593,7 +597,7 @@ def run_fem_analysis(
     The solver runs synchronously on the FreeCAD GUI thread and blocks all
     other RPC calls for its duration; do not fan out parallel requests.
 
-    Returns max von Mises stress (MPa), max/min displacement (mm), node count,
+    Returns max/min von Mises stress (MPa), max displacement (mm), node count,
     and the working directory CalculiX wrote to. On failure, returns the
     prerequisite-check or solver error along with the working directory for
     triage.
